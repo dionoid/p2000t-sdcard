@@ -136,9 +136,10 @@ loadrom:
     call copydata       ; bc contains number of bytes
     ld a,0
     out (LED_IO), a     ; turn read LED off
-    xor a               ; set flags z, nc
-    jp $28d4            ; launch basic program
-
+    ; xor a               ; set flags z, nc
+    ; jp $28d4            ; launch basic program
+    jp $1fc6            ; return to Basic
+    
 msglp:
     DB $06,$0D,"Launching program",$FF
 

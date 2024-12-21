@@ -29,7 +29,7 @@ char* __commands[] = {
     "lscas",
     "cd",
     "fileinfo",
-    "run",
+    "load",
     "hexdump",
     "ledtest",
     "stack",
@@ -45,7 +45,7 @@ void (*__operations[])(void) = {
     command_lscas,
     command_cd,
     command_fileinfo,
-    command_run,
+    command_load,
     command_hexdump,
     command_ledtest,
     command_stack,
@@ -129,10 +129,10 @@ void command_fileinfo(void) {
 }
 
 /**
- * @brief Load a (CAS) file into memory and launch it
+ * @brief Load a (CAS) file into memory and returns to Basic
  * 
  */
-void command_run(void) {
+void command_load(void) {
     print_recall("Searching file...");
 
     int fileid = atoi(&__lastinput[3]);
@@ -162,7 +162,7 @@ void command_run(void) {
         terminal_printtermbuffer();
 
         print("Press c to calculate checksum or any");
-        print("other key to launch program.");
+        print("other key to go to Basic.");
         if(wait_for_key_fixed(28) == 1) {
             // calculate CRC16 checksum
             print_recall("Calculating CRC16 checksum...");
@@ -170,7 +170,7 @@ void command_run(void) {
             sprintf(termbuffer, "CRC16 checksum: %c0x%04X", COL_CYAN, crc16);
             terminal_printtermbuffer();
 
-            print("Press any key to start program");
+            print("Press any key to go to Basic");
             wait_for_key();
         }
 

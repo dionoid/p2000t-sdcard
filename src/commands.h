@@ -65,7 +65,7 @@ void command_fileinfo(void);
  * @brief Load a (CAS) file into memory and launch it
  * 
  */
-void command_run(void);
+void command_load(void);
 
 /**
  * @brief Test burning of read and write LEDs
