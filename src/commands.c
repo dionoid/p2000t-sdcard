@@ -135,7 +135,7 @@ void command_fileinfo(void) {
 void command_load(void) {
     print_recall("Searching file...");
 
-    int fileid = atoi(&__lastinput[3]);
+    int fileid = atoi(&__lastinput[4]);
 
     // find a file and store its cluster structure into the linked list
     if(read_file_metadata(fileid) != 0) {
