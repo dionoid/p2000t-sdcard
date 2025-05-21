@@ -1,5 +1,5 @@
 # Use the z88dk/z88dk image as the base image
-FROM z88dk/z88dk:latest
+FROM --platform=linux/amd64 z88dk/z88dk:latest
 
 # Set environment variables for Python installation
 ENV PYTHONUNBUFFERED=1

@@ -35,3 +35,5 @@ fp-info-cache
 *.BIN
 *.bin
 card.png
+
+.DS_Store
