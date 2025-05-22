@@ -463,7 +463,7 @@ void store_cas_ram(uint32_t faddr, uint16_t ram_addr) {
 }
 
 /**
- * @brief Store a file in the external ram
+ * @brief Store a file in the internal ram
  * 
  * @param faddr    cluster address of the file
  * @param ram_addr first position in ram to store the file

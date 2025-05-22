@@ -147,6 +147,11 @@ void command_run(void) {
         terminal_printtermbuffer();
         sprintf(termbuffer, "Filesize: %lu bytes", _filesize_current_file);
         terminal_printtermbuffer();
+
+        if(memory[0x605C] == 1 && _filesize_current_file > MAX_BYTES_16K) {
+            print_error("File too large to load");
+            return;
+        }
         
         set_ram_bank(RAM_BANK_CASSETTE);
         store_cas_ram(_linkedlist[0], 0x0000);
