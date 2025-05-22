@@ -33,7 +33,7 @@ launcher: main.c commands.c fat32.c memory.c terminal.c sdcard.c sdcard.asm ram.
 	-pragma-define:REGISTER_SP=-1 \
 	-pragma-define:CLIB_FOPEN_MAX=0 \
 	-pragma-define:CRT_ON_EXIT=0x10002 \
-	-pragma-define:CRT_ENABLE_EIDI=0x33 \
+	-pragma-define:CRT_ENABLE_EIDI=0x12 \
 	-pragma-define:CLIB_MALLOC_HEAP_SIZE=0 \
 	-pragma-define:CLIB_STDIO_HEAP_SIZE=0 \
 	--max-allocs-per-node3000 \
@@ -65,3 +65,26 @@ launcher-slot1: main.c commands.c fat32.c memory.c terminal.c sdcard.c sdcard.as
 	-create-app -m \
 	&& mv LAUNCHER-SLOT1.bin LAUNCHER-SLOT1.BIN \
 	&& wc -c < LAUNCHER-SLOT1.BIN
+
+rocket: rocket.c commands.c fat32.c memory.c terminal.c sdcard.c sdcard.asm ram.asm util.asm rom.asm crc16.asm
+	zcc \
+	-DLONG_FILE_NAMES \
+	+embedded -clib=sdcc_iy \
+	commands.c fat32.c rocket.c memory.c terminal.c \
+	util.c sdcard.c sdcard.asm ram.asm util.asm rom.asm \
+	terminal_ext.c crc16.asm \
+	-startup=0 \
+	-pragma-define:CRT_ORG_CODE=0x7000 \
+	-pragma-define:REGISTER_SP=-1 \
+	-pragma-define:CLIB_FOPEN_MAX=0 \
+	-pragma-define:CRT_ON_EXIT=0x10002 \
+	-pragma-define:CRT_ENABLE_EIDI=0x22 \
+	-pragma-define:CLIB_MALLOC_HEAP_SIZE=0 \
+	-pragma-define:CLIB_STDIO_HEAP_SIZE=0 \
+	--max-allocs-per-node200000 \
+	--opt-code-size \
+	-SO3 -bn ROCKET.BIN \
+	-create-app -m \
+	&& mv ROCKET.bin ROCKET.BIN \
+	&& wc -c < ROCKET.BIN \
+	&& truncate -s 11520 ROCKET.BIN

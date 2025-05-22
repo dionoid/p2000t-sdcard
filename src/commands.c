@@ -111,7 +111,11 @@ void command_fileinfo(void) {
         return;
     }
 
+#ifdef LONG_FILE_NAMES
+    sprintf(termbuffer, "Filename: %.26s", _filename);
+#else
     sprintf(termbuffer, "Filename: %s.%s", _basename, _ext);
+#endif
     terminal_printtermbuffer();
     sprintf(termbuffer, "Filesize: %lu bytes", _filesize_current_file);
     terminal_printtermbuffer();
@@ -143,15 +147,20 @@ void command_run(void) {
     }
 
     if(memcmp(_ext, "CAS", 3) == 0) {
+
+#ifdef LONG_FILE_NAMES
+        sprintf(termbuffer, "Filename:%c%.22s", COL_CYAN, _filename);
+#else
         sprintf(termbuffer, "Filename: %s.%s", _basename, _ext);
+#endif
         terminal_printtermbuffer();
         sprintf(termbuffer, "Filesize: %lu bytes", _filesize_current_file);
         terminal_printtermbuffer();
 
-        if(memory[0x605C] == 1 && _filesize_current_file > MAX_BYTES_16K) {
-            print_error("File too large to load");
-            return;
-        }
+        // if(memory[0x605C] == 1 && _filesize_current_file > MAX_BYTES_16K) {
+        //     print_error("File too large to load");
+        //     return;
+        // }
         
         set_ram_bank(RAM_BANK_CASSETTE);
         store_cas_ram(_linkedlist[0], 0x0000);
@@ -243,7 +252,11 @@ void command_hexdump(void) {
     // read the first sector of the file
     read_sector(calculate_sector_address(_linkedlist[0], 0));
 
+#ifdef LONG_FILE_NAMES
+    sprintf(termbuffer, "Filename: %.26s", _filename);
+#else
     sprintf(termbuffer, "Filename: %s.%s", _basename, _ext);
+#endif
     terminal_printtermbuffer();
 
     // print to screen
