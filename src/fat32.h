@@ -27,7 +27,6 @@
 #include "sdcard.h"
 #include "util.h"
 #include "ram.h"
-#include "util.h"
 
 // global variables for the FAT
 extern uint16_t _bytes_per_sector;
@@ -44,7 +43,7 @@ extern uint32_t _current_folder_cluster;
 
 // global variables for currently active file or folder
 extern uint32_t _filesize_current_file;
-extern uint8_t _filename[MAX_LFN_LENGTH+1]; // filename buffer
+extern uint8_t _filename[]; // filename buffer
 extern char _ext[4]; // file extension (3 chars, uppercased)
 extern uint8_t _current_attrib;
 

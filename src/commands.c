@@ -19,9 +19,9 @@
  **************************************************************************/
 
 #include "commands.h"
+#include "launch_cas.h"
 
 char __lastinput[INPUTLENGTH];
-uint8_t __loadcas = 0;
 
 // set list of commands
 char* __commands[] = {
@@ -190,7 +190,7 @@ void command_loadrun(unsigned type) {
         wait_for_key();
 
         set_ram_bank(0);
-        __loadcas = type + 1;
+        launch_cas(type ? 0x28d4 : 0x1FC6);
     } else if(memcmp(_ext, "PRG", 3) == 0) {
         if(memory[0x605C] < 2) {
             print_error("Insufficient memory.");

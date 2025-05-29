@@ -40,7 +40,6 @@
 #define __clock_freq 2500000
 
 extern char __lastinput[INPUTLENGTH];
-extern uint8_t __loadcas;
 
 void commands_ls(void);
 
