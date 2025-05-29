@@ -33,6 +33,7 @@ uint32_t _SECTOR_begin_lba = 0;
 uint32_t _lba_addr_root_dir = 0;
 uint32_t _filesize_current_file = 0;
 uint32_t _current_folder_cluster = 0;
+uint8_t _num_of_pages = 1;
 
 uint8_t _filename[MAX_FILENAME_LENGTH+1];
 char _ext[4] = {0};
@@ -82,23 +83,28 @@ void read_partition(uint32_t lba0) {
 
 /**
  * @brief Read the contents of the root folder and search for a file identified 
- *        by file id. When a negative file_id is supplied, the directory is
+ *        by file id. When file_id=0 is supplied, the directory is
  *        simply scanned and the list of files are outputted to the screen.
  * 
  * @param file_id ith file in the folder
  * @return uint32_t first cluster of the file or directory
  */
-uint32_t read_folder(int16_t file_id, uint8_t casrun) {
-    (void)casrun; // unused parameter, but needed for compatibility
+uint32_t read_folder(int16_t file_id, uint8_t page_number) {
+    //(void)scanpages; // unused parameter, but needed for compatibility
+
+    if (file_id == 0 && page_number == 0) {
+        _num_of_pages = 1; // reset page count
+    }
 
     // loop over the clusters and read directory contents
     uint8_t ctr = 0;                // counter over clusters
     uint16_t fctr = 0;              // counter over directory entries (files and folders)
-    uint32_t totalfilesize = 0;     // collect size of files in folder
     uint8_t stopreading = 0;        // whether to break of reading procedure
     uint16_t loc = 0;               // current entry position
     uint8_t firstPos = 0;
     uint8_t lfn_found = 0; 
+    uint8_t curr_page_number = 1;
+    uint8_t read_names;
 
     while(_linkedlist[ctr] != 0xFFFFFFFF && ctr < F_LL_SIZE && stopreading == 0) {
         
@@ -126,9 +132,11 @@ uint32_t read_folder(int16_t file_id, uint8_t casrun) {
                     break;
                 }
 
+                read_names = file_id == 0 && (curr_page_number == page_number || (page_number == 0 && curr_page_number == 1));
+
                 // check for LFN entry
-                if ((_current_attrib & 0x0F) == 0x0F) {
-                    if (file_id < 0) {
+                if (read_names) {
+                    if ((_current_attrib & 0x0F) == 0x0F) {
                         if (!lfn_found) {
                             lfn_found = 1;  // indicate LNF found
                             memset(_filename, 0, MAX_FILENAME_LENGTH+1);
@@ -156,48 +164,49 @@ uint32_t read_folder(int16_t file_id, uint8_t casrun) {
                         || memcmp(_ext, "PRG", 3) == 0) {
 
                         fctr++;
-                        if (file_id < 0 || fctr == file_id) {
-                            const uint32_t fc = grab_cluster_address_from_fileblock(loc);
+
+                        if (read_names) {
+                            // if no LFN found, the SFN filename needs to be formatted
+                            if (!lfn_found) {
+                                //copy_from_ram(loc, _filename, 8);
+                                memcpy(_filename, _short_name, 8);
+                                memcpy(_filename + 9, _ext, 4); // copy extension (incl terminator)
+                                // if file, inject dot before extension
+                                _filename[8] = (_current_attrib & 0x10) ? '\0' : '.';
+                                // remove superfluous spaces before extension
+                                uint8_t k = 0;
+                                for (k = 7; k >= 1 && _filename[k] == ' '; k--);
+                                if (k < 7) memcpy(&_filename[k+1], &_filename[8], 5);
+                            }
+
+                            if(_current_attrib & 0x10) {
+                                // directory entry
+                                if (memcmp(_short_name, "..", 2) == 0)
+                                    strcpy(_filename, "(map terug)");
+
+                                strcpy(vidmem + 0x50*(fctr+2) + 4, _filename);
+                                vidmem[0x50*(fctr+2) + 4 + strlen(_filename)] = '/';
+                            } else {
+                                // file entry          
+                                strcpy(vidmem + 0x50*(fctr+2) + 4, _filename);
+                            }
+                        }
+
+                        if(file_id == 0 && (fctr % 16) == 0) {
+                            curr_page_number++;
+                            if (page_number > 0 && curr_page_number > page_number) {
+                                stopreading = 1; // stop reading if we showed the requested page
+                                break;
+                            }
+                        }
+
+                        if(fctr == file_id) {
                             _filesize_current_file = ram_read_uint32_t(loc + 0x1C);
-                            
-                            if(file_id < 0) {
+                            return grab_cluster_address_from_fileblock(loc);
+                        }
 
-                                totalfilesize += _filesize_current_file;
-                            
-                                // if no LFN found, the SFN filename needs to be formatted
-                                if (!lfn_found) {
-                                    //copy_from_ram(loc, _filename, 8);
-                                    memcpy(_filename, _short_name, 8);
-                                    memcpy(_filename + 9, _ext, 4); // copy extension (incl terminator)
-                                    // if file, inject dot before extension
-                                    _filename[8] = (_current_attrib & 0x10) ? '\0' : '.';
-                                    // remove superfluous spaces before extension
-                                    uint8_t k = 0;
-                                    for (k = 7; k >= 1 && _filename[k] == ' '; k--);
-                                    if (k < 7) memcpy(&_filename[k+1], &_filename[8], 5);
-                                }
-
-                                if(_current_attrib & 0x10) {
-                                    // directory entry
-                                    if (memcmp(_short_name, "..", 2) == 0)
-                                        strcpy(_filename, "(map terug)");
-
-                                    strcpy(vidmem + 0x50*(fctr+2) + 4, _filename);
-                                    vidmem[0x50*(fctr+2) + 4 + strlen(_filename)] = '/';
-                                } else {
-                                    // file entry          
-                                    strcpy(vidmem + 0x50*(fctr+2) + 4, _filename);
-                                }
-
-                                if(fctr % 16 == 0) {
-                                    stopreading = 1;
-                                    break;
-                                }
-                            }
-
-                            if(fctr == file_id) {
-                                return fc;
-                            }
+                        if(file_id == 0 && page_number == 0 && fctr > 1 && ((fctr-1) % 16) == 0) {
+                            _num_of_pages++;
                         }
                     }
                     lfn_found = 0; // reset LFN tracking 

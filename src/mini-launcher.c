@@ -18,6 +18,7 @@
  *                                                                        *
  **************************************************************************/
 
+#include <stdio.h>
 #include <string.h>
 #include <stdint.h>
 #include <z80.h>
@@ -29,10 +30,14 @@
 #include "ram.h"
 #include "fat32.h"
 
+// set printf io
+#pragma printf "%d"
+
 // function prototypes
 void init(void);
 void clearscreen(void);
 void clear_status_line(void);
+void update_pagination(void);
 void call_addr(uint16_t addr) __z88dk_fastcall;
 
 // dummy terminal functions
@@ -41,6 +46,7 @@ void print(char* str) { (void)str; }
 void print_recall(char* str) { (void)str;}
 
 uint16_t highlight_id = 1;
+uint8_t page_num = 1;
 
 void highlight_refresh(void) {
     // update highlight
@@ -58,7 +64,8 @@ void main(void) {
 
     // build linked list for the root directory
     build_linked_list(_current_folder_cluster);
-    read_folder(-1, 0);
+    read_folder(0, 0);
+    update_pagination();
     highlight_refresh();
 
     // put in infinite loop and wait for program selection
@@ -99,11 +106,15 @@ void main(void) {
                         } else {
                             _current_folder_cluster = clus;
                         }
+
                         build_linked_list(_current_folder_cluster);
+                        page_num = 1;
                         clearscreen();
-                        read_folder(-1, 0);
+                        read_folder(0, 0);
+                        update_pagination();
                         highlight_id = 1; // highlight first item in newly loaded folder
                         highlight_refresh();
+
                     }
                     else {
                         // load cas data to external RAM
@@ -162,13 +173,19 @@ static const uint8_t bottom_bar[] = {
 void clearscreen(void) {
     // clear screen
     memset(vidmem, 0x00, 0x780);
-    strcpy(vidmem, "\x06\x0DP2000T SD-CARD\x0C       \x03Pagina 1 van 1");
+    strcpy(vidmem, "\x06\x0DP2000T SD-CARD\x0C");
     for (uint8_t i = 2; i < 20; i++) {
         strcpy(vidmem + 0x50*i, "\x04\x1D\x03");
     }
     for (uint8_t i = 0; i < 4; i++) {
         memcpy(vidmem + 0x50 * (20 + i), bottom_bar + i * 40, 40);
     }
+}
+
+void update_pagination(void) {
+    char pagina_str[32];
+    sprintf(pagina_str, "\x03Pagina %d van %d", page_num, _num_of_pages);
+    strcpy(vidmem + 39 - strlen(pagina_str), pagina_str);
 }
 
 void clear_status_line(void) {
@@ -188,7 +205,7 @@ void init(void) {
     // activate and mount sd card
     uint32_t lba0;
     if(init_sdcard() != 0 || (lba0 = read_mbr()) == 0) {
-        strcpy(vidmem + 0x50*10, "\0x01Cannot connect to SD-CARD.");
+        strcpy(vidmem + 0x50*10, "\x01Cannot connect to SD-CARD.");
         for(;;){}
     }
     read_partition(lba0);

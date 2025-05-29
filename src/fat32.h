@@ -46,6 +46,7 @@ extern uint32_t _filesize_current_file;
 extern uint8_t _filename[]; // filename buffer
 extern char _ext[4]; // file extension (3 chars, uppercased)
 extern uint8_t _current_attrib;
+extern uint8_t _num_of_pages;
 
 /**
  * @brief Read the Master Boot Record

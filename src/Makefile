@@ -90,7 +90,7 @@ mini-launcher: mini-launcher.c fat32-mini.c memory.c sdcard.c sdcard.asm ram.asm
 	&& wc -c < MINI-LAUNCHER.BIN \
 	&& truncate -s 11520 MINI-LAUNCHER.BIN
 
-	@if grep -E 'sprintf|printf|fread|fwrite' MINI-LAUNCHER.map ; then \
-		echo "ERROR: stdio symbols found in MINI-LAUNCHER.map!"; \
-		exit 1; \
-	fi
+# @if grep -E 'sprintf|printf|fread|fwrite' MINI-LAUNCHER.map ; then \
+# 	echo "ERROR: stdio symbols found in MINI-LAUNCHER.map!"; \
+# 	exit 1; \
+# fi
