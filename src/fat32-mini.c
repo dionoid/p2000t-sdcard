@@ -18,9 +18,7 @@
  *                                                                        *
  **************************************************************************/
 
-#include "fat32.h"
-
-#define MAX_FILENAME_LENGTH          39 // 3 * 13
+#include "fat32-mini.h"
 
 uint8_t _sectors_per_cluster = 0;
 uint16_t _reserved_sectors = 0;
@@ -35,13 +33,15 @@ uint32_t _filesize_current_file = 0;
 uint32_t _current_folder_cluster = 0;
 uint8_t _num_of_pages = 1;
 
-uint8_t _filename[MAX_FILENAME_LENGTH+1];
+uint8_t _filename[MAX_LFN_LENGTH+1];
 char _ext[4] = {0};
 char _short_name[9] = {0};
 uint8_t _current_attrib = 0;
 
 uint8_t _curr_file_ctr = 0;
 
+uint32_t _sector_addr_cache[32];
+uint16_t _sector_fctr_cache[32];
 
 /**
  * @brief Read the Master Boot Record
@@ -81,18 +81,71 @@ void read_partition(uint32_t lba0) {
     _SECTOR_begin_lba = lba0 + _reserved_sectors + (_number_of_fats * _sectors_per_fat);
 }
 
+uint32_t find_file(uint16_t file_id) {
+    uint8_t ctr = 0;                // counter over clusters
+    uint16_t fctr = 0;              // counter over directory entries (files and folders)
+    uint16_t loc = 0;               // current entry position
+    uint8_t firstPos = 0;
+    uint8_t secondPos = 0;
+    //uint8_t attrib = 0;
+
+    while(_linkedlist[ctr] != 0xFFFFFFFF && ctr < F_LL_SIZE) {
+        
+        // print cluster number and address
+        uint32_t caddr = calculate_sector_address(_linkedlist[ctr], 0);
+
+        // loop over all sectors per cluster
+        for(uint8_t i=0; i<_sectors_per_cluster; i++) {
+            read_sector(caddr);            // read sector data
+            loc = SDCACHE0;
+            for(uint8_t j=0; j<16; j++) { // 16 file tables per sector
+                // check first position
+                firstPos = ram_read_uint8_t(loc);
+                _current_attrib = ram_read_uint8_t(loc + 0x0B);    // attrib byte
+
+                // continue if an unused entry is encountered 0xE5
+                if(firstPos == 0xE5) {
+                    loc += 32;  // next file entry location
+                    continue;
+                }
+
+                // early exit if a zero is read
+                if(firstPos == 0x00) return _root_dir_first_cluster;
+
+                // check for SFN entry
+                if((_current_attrib & 0x0F) == 0x00) {
+
+                    secondPos = ram_read_uint8_t(loc+1);
+
+                    if((_current_attrib & 0x10) == 0 || firstPos != '.' || secondPos == '.') {
+
+                        fctr++;
+
+                        if (file_id == fctr) {
+                            //_current_attrib = attrib; // store current attrib byte
+                            copy_from_ram(loc+8, _ext, 3);
+                            _filesize_current_file = ram_read_uint32_t(loc + 0x1C);
+                            return grab_cluster_address_from_fileblock(loc);
+                        }
+                    }
+                }
+                loc += 32;  // next file entry location
+            }
+            caddr++;    // next sector
+        }
+        ctr++;  // next cluster
+    }
+    return _root_dir_first_cluster; //not found
+}
+
 /**
- * @brief Read the contents of the root folder and search for a file identified 
- *        by file id. When file_id=0 is supplied, the directory is
- *        simply scanned and the list of files are outputted to the screen.
+ * @brief Read the contents of the folder and display a page of files and folders.
  * 
- * @param file_id ith file in the folder
+ * @param page_number page number to display, 0 for calculating the number of pages
  * @return uint32_t first cluster of the file or directory
  */
-uint32_t read_folder(int16_t file_id, uint8_t page_number) {
-    //(void)scanpages; // unused parameter, but needed for compatibility
-
-    if (file_id == 0 && page_number == 0) {
+void read_folder(uint8_t page_number) {
+    if (page_number == 0) {
         _num_of_pages = 1; // reset page count
     }
 
@@ -104,7 +157,8 @@ uint32_t read_folder(int16_t file_id, uint8_t page_number) {
     uint8_t firstPos = 0;
     uint8_t lfn_found = 0; 
     uint8_t curr_page_number = 1;
-    uint8_t read_names;
+    uint8_t show_names;
+    uint16_t display_fctr = 0; 
 
     while(_linkedlist[ctr] != 0xFFFFFFFF && ctr < F_LL_SIZE && stopreading == 0) {
         
@@ -128,18 +182,17 @@ uint32_t read_folder(int16_t file_id, uint8_t page_number) {
 
                 // early exit if a zero is read
                 if(firstPos == 0x00) {
-                    stopreading = 1;
-                    break;
+                    return;
                 }
 
-                read_names = file_id == 0 && (curr_page_number == page_number || (page_number == 0 && curr_page_number == 1));
+                show_names = curr_page_number == page_number || (page_number == 0 && curr_page_number == 1);
 
                 // check for LFN entry
-                if (read_names) {
+                if (show_names) {
                     if ((_current_attrib & 0x0F) == 0x0F) {
                         if (!lfn_found) {
                             lfn_found = 1;  // indicate LNF found
-                            memset(_filename, 0, MAX_FILENAME_LENGTH+1);
+                            memset(_filename, 0, MAX_LFN_LENGTH+1);
                         }
                         uint8_t seq = firstPos & 0x1F;  // LFN sequence number
                         uint8_t k = 0;
@@ -155,57 +208,53 @@ uint32_t read_folder(int16_t file_id, uint8_t page_number) {
                 // check for SFN entry
                 if((_current_attrib & 0x0F) == 0x00) {
 
-                    // get short name and extension
-                    copy_from_ram(loc, _short_name, 8);
-                    copy_from_ram(loc+8, _ext, 3);
+                    uint8_t secondPos = ram_read_uint8_t(loc+1);
 
-                    if(((_current_attrib & 0x10) && memcmp(_short_name, ". ", 2) != 0) 
-                        || memcmp(_ext, "CAS", 3) == 0
-                        || memcmp(_ext, "PRG", 3) == 0) {
+                    if(!(_current_attrib & 0x10) || firstPos != '.' || secondPos == '.') {
 
                         fctr++;
 
-                        if (read_names) {
+                        if (show_names) {
+                            display_fctr++;
+
                             // if no LFN found, the SFN filename needs to be formatted
                             if (!lfn_found) {
-                                //copy_from_ram(loc, _filename, 8);
-                                memcpy(_filename, _short_name, 8);
-                                memcpy(_filename + 9, _ext, 4); // copy extension (incl terminator)
+                                copy_from_ram(loc, _filename, 8);
+                                copy_from_ram(loc+8, _filename+9, 3);
+                                _filename[12] = '\0'; // terminate the string
                                 // if file, inject dot before extension
                                 _filename[8] = (_current_attrib & 0x10) ? '\0' : '.';
                                 // remove superfluous spaces before extension
                                 uint8_t k = 0;
                                 for (k = 7; k >= 1 && _filename[k] == ' '; k--);
-                                if (k < 7) memcpy(&_filename[k+1], &_filename[8], 5);
+                                if (k < 7) memcpy(&_filename[k+1], &_filename[8], 5); // 5 = "." + ext + '\0'
                             }
+
+                            // char _temp[9] = {0};
+                            // copy_from_ram(loc, _temp, 8);
+                            // sprintf(vidmem + 0x50*(display_fctr+2) + 4, "%s: ctr %d, caddr %d", _temp, ctr, caddr);
 
                             if(_current_attrib & 0x10) {
                                 // directory entry
-                                if (memcmp(_short_name, "..", 2) == 0)
+                                if (secondPos == '.')
                                     strcpy(_filename, "(map terug)");
 
-                                strcpy(vidmem + 0x50*(fctr+2) + 4, _filename);
-                                vidmem[0x50*(fctr+2) + 4 + strlen(_filename)] = '/';
+                                strcpy(vidmem + 0x50*(display_fctr+2) + 4, _filename);
+                                vidmem[0x50*(display_fctr+2) + 4 + strlen(_filename)] = '/';
                             } else {
                                 // file entry          
-                                strcpy(vidmem + 0x50*(fctr+2) + 4, _filename);
+                                strcpy(vidmem + 0x50*(display_fctr+2) + 4, _filename);
                             }
                         }
 
-                        if(file_id == 0 && (fctr % 16) == 0) {
+                        if((fctr % PAGE_SIZE) == 0) {
                             curr_page_number++;
                             if (page_number > 0 && curr_page_number > page_number) {
-                                stopreading = 1; // stop reading if we showed the requested page
-                                break;
+                                return;
                             }
                         }
 
-                        if(fctr == file_id) {
-                            _filesize_current_file = ram_read_uint32_t(loc + 0x1C);
-                            return grab_cluster_address_from_fileblock(loc);
-                        }
-
-                        if(file_id == 0 && page_number == 0 && fctr > 1 && ((fctr-1) % 16) == 0) {
+                        if(page_number == 0 && fctr > 1 && ((fctr-1) % 16) == 0) {
                             _num_of_pages++;
                         }
                     }
@@ -217,8 +266,6 @@ uint32_t read_folder(int16_t file_id, uint8_t page_number) {
         }
         ctr++;  // next cluster
     }
-
-    return _root_dir_first_cluster;
 }
 
 

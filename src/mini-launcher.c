@@ -28,10 +28,10 @@
 #include "ports.h"
 #include "memory.h"
 #include "ram.h"
-#include "fat32.h"
+#include "fat32-mini.h"
 
 // set printf io
-#pragma printf "%d"
+#pragma printf "%d %c %s"
 
 // function prototypes
 void init(void);
@@ -64,7 +64,7 @@ void main(void) {
 
     // build linked list for the root directory
     build_linked_list(_current_folder_cluster);
-    read_folder(0, 0);
+    read_folder(0);
     update_pagination();
     highlight_refresh();
 
@@ -96,29 +96,61 @@ void main(void) {
                 }
                 highlight_refresh();
             }
+            //key right
+            if(key0 == 23)  {
+                if (_num_of_pages == 1) continue;
+                if (page_num < _num_of_pages) {
+                    page_num++;
+                } else {
+                    page_num = 1; // wrap around
+                }
+                clearscreen();
+                read_folder(page_num);
+                update_pagination();
+                highlight_id = 1; // highlight first item in newly loaded folder
+                highlight_refresh();
+            }
+            //key left
+            if(key0 == 0)  {
+                if (_num_of_pages == 1) continue;
+                if (page_num > 1) {
+                    page_num--;
+                } else {
+                    page_num = _num_of_pages; // wrap around
+                }
+                clearscreen();
+                read_folder(page_num);
+                update_pagination();
+                highlight_id = 1; // highlight first item in newly loaded folder
+                highlight_refresh();
+            }
             // space or enter key
             if(key0 == 17 || key0 == 52)  { // space or enter
-                uint32_t clus = read_folder(highlight_id, 0);
-                if(clus != _root_dir_first_cluster) {
+                uint32_t cluster = find_file(highlight_id + PAGE_SIZE * (page_num-1));
+                if(cluster != _root_dir_first_cluster) {
                     if(_current_attrib & 0x10) {
-                        if(clus == 0) { // if zero, this is the root directory
+                        if(cluster == 0) { // if zero, this is the root directory
                             _current_folder_cluster = _root_dir_first_cluster;
                         } else {
-                            _current_folder_cluster = clus;
+                            _current_folder_cluster = cluster;
                         }
 
                         build_linked_list(_current_folder_cluster);
                         page_num = 1;
                         clearscreen();
-                        read_folder(0, 0);
+                        read_folder(0);
                         update_pagination();
                         highlight_id = 1; // highlight first item in newly loaded folder
                         highlight_refresh();
 
                     }
                     else {
-                        // load cas data to external RAM
-                        uint32_t cluster = read_folder(highlight_id, 0);
+                        if (memcmp(_ext, "CAS", 3) != 0 && memcmp(_ext, "PRG", 3) != 0) {
+                            // unsupported file type
+                            vidmem[0x50*(highlight_id + 2) + 2] = 0x01; // color line red
+                            continue;
+                        }
+                        
                         build_linked_list(cluster);
 
                         if (memcmp(_ext, "CAS", 3) == 0) {
@@ -129,33 +161,33 @@ void main(void) {
                             store_cas_ram(_linkedlist[0], 0x0000);
                             set_ram_bank(0);
                             break; // break out of the loop to run the program
-                        } else {
-                            // load PRG into internal RAM
-                            if(memory[0x605C] < 2) {
-                                vidmem[0x50*(highlight_id + 2) + 2] = 0x01; // color line red
-                                goto restore_state;
-                            }
-
-                            store_prg_intram(_linkedlist[0], PROGRAM_LOCATION);
-
-                            // verify that the signature is correct
-                            if(memory[PROGRAM_LOCATION] != 0x50) {
-                                vidmem[0x50*(highlight_id + 2) + 2] = 0x01; // color line red
-                                goto restore_state;
-                            }
-
-                            // transfer copy of current screen to external RAM
-                            copy_to_ram(vidmem, VIDMEM_CACHE, 0x1000);
-
-                            // launch the program
-                            call_addr(PROGRAM_LOCATION + 0x10);
-
-                            // retrieve copy of current screen
-                            copy_from_ram(VIDMEM_CACHE, vidmem, 0x1000);
-                            memset(keymem, 0x00, 0x0D);
-restore_state:
-                            build_linked_list(_current_folder_cluster);
                         }
+
+                        // load PRG into internal RAM
+                        if(memory[0x605C] < 2) {
+                            vidmem[0x50*(highlight_id + 2) + 2] = 0x01; // color line red
+                            goto restore_state;
+                        }
+
+                        store_prg_intram(_linkedlist[0], PROGRAM_LOCATION);
+
+                        // verify that the signature is correct
+                        if(memory[PROGRAM_LOCATION] != 0x50) {
+                            vidmem[0x50*(highlight_id + 2) + 2] = 0x01; // color line red
+                            goto restore_state;
+                        }
+
+                        // transfer copy of current screen to external RAM
+                        copy_to_ram(vidmem, VIDMEM_CACHE, 0x1000);
+
+                        // launch the program
+                        call_addr(PROGRAM_LOCATION + 0x10);
+
+                        // retrieve copy of current screen
+                        copy_from_ram(VIDMEM_CACHE, vidmem, 0x1000);
+                        memset(keymem, 0x00, 0x0D);
+restore_state:
+                        build_linked_list(_current_folder_cluster);
                     }
                 }
             }
