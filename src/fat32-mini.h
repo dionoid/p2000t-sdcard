@@ -22,8 +22,9 @@
 #define _FAT32_H
 
 #define F_LL_SIZE               16
-#define MAX_LFN_LENGTH          39 // 3 * 13
+#define MAX_LFN_LENGTH          26 // 2 * 13
 #define PAGE_SIZE               16 // number of files per page
+#define DISPLAY_OFFSET           1
 
 #include "sdcard.h"
 #include "util.h"
@@ -67,10 +68,10 @@ void read_partition(uint32_t lba0);
 /**
  * @brief Read the contents of the folder and display a page of files and folders.
  * 
- * @param page_number page number to display, 0 for calculating the number of pages
+ * @param page_number page number to display
  * @return uint32_t first cluster of the file or directory
  */
-void read_folder(uint8_t page_number);
+void read_folder(uint8_t page_number, uint8_t count_pages);
 
 /**
  * @brief Find a file identified by BASENAME and EXT in the folder correspond

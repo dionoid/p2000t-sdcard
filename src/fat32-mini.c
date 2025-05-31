@@ -38,11 +38,6 @@ char _ext[4] = {0};
 char _short_name[9] = {0};
 uint8_t _current_attrib = 0;
 
-uint8_t _curr_file_ctr = 0;
-
-uint32_t _sector_addr_cache[32];
-uint16_t _sector_fctr_cache[32];
-
 /**
  * @brief Read the Master Boot Record
  * 
@@ -87,7 +82,6 @@ uint32_t find_file(uint16_t file_id) {
     uint16_t loc = 0;               // current entry position
     uint8_t firstPos = 0;
     uint8_t secondPos = 0;
-    //uint8_t attrib = 0;
 
     while(_linkedlist[ctr] != 0xFFFFFFFF && ctr < F_LL_SIZE) {
         
@@ -144,29 +138,38 @@ uint32_t find_file(uint16_t file_id) {
  * @param page_number page number to display, 0 for calculating the number of pages
  * @return uint32_t first cluster of the file or directory
  */
-void read_folder(uint8_t page_number) {
-    if (page_number == 0) {
+void read_folder(uint8_t page_number, uint8_t count_pages) {
+    if (count_pages) {
         _num_of_pages = 1; // reset page count
     }
 
     // loop over the clusters and read directory contents
     uint8_t ctr = 0;                // counter over clusters
     uint16_t fctr = 0;              // counter over directory entries (files and folders)
-    uint8_t stopreading = 0;        // whether to break of reading procedure
     uint16_t loc = 0;               // current entry position
     uint8_t firstPos = 0;
     uint8_t lfn_found = 0; 
-    uint8_t curr_page_number = 1;
     uint8_t show_names;
-    uint16_t display_fctr = 0; 
+    uint16_t prev_ctr_start_fctr = 0;
+    uint32_t prev_ctr = 0;
+    uint16_t display_fctr = 0;
+    uint32_t caddr = 0;             // current sector address
 
-    while(_linkedlist[ctr] != 0xFFFFFFFF && ctr < F_LL_SIZE && stopreading == 0) {
+    if (!count_pages) {
+        //look up cached jumptable
+        //ctr = _ctr_cache[page_number-1];
+        //fctr = _fctr_cache[page_number-1];
+        ctr = ram_read_uint8_t(SDCACHE2 + page_number-1);
+        fctr = ram_read_uint16_t(SDCACHE3 + 2 * (page_number-1));
+        //sprintf(vidmem + 0x50*21, "ctr: %d, fctr: %d  ", ctr, fctr);
+    }
+
+    while(_linkedlist[ctr] != 0xFFFFFFFF && ctr < F_LL_SIZE) {
         
-        // print cluster number and address
         uint32_t caddr = calculate_sector_address(_linkedlist[ctr], 0);
 
         // loop over all sectors per cluster
-        for(uint8_t i=0; i<_sectors_per_cluster && stopreading == 0; i++) {
+        for(uint8_t i=0; i<_sectors_per_cluster; i++) {
             read_sector(caddr);            // read sector data
             loc = SDCACHE0;
             for(uint8_t j=0; j<16; j++) { // 16 file tables per sector
@@ -185,7 +188,8 @@ void read_folder(uint8_t page_number) {
                     return;
                 }
 
-                show_names = curr_page_number == page_number || (page_number == 0 && curr_page_number == 1);
+                show_names = (display_fctr < PAGE_SIZE) && (page_number == fctr / PAGE_SIZE + 1); // current page number based on file count
+                //show_names = curr_page_number == page_number || (page_number == 0 && curr_page_number == 1);
 
                 // check for LFN entry
                 if (show_names) {
@@ -232,30 +236,38 @@ void read_folder(uint8_t page_number) {
 
                             // char _temp[9] = {0};
                             // copy_from_ram(loc, _temp, 8);
-                            // sprintf(vidmem + 0x50*(display_fctr+2) + 4, "%s: ctr %d, caddr %d", _temp, ctr, caddr);
+                            // sprintf(vidmem + 0x50*(display_fctr+DISPLAY_OFFSET) + 4, "%s: ctr %d, caddr %d", _temp, ctr, caddr);
 
                             if(_current_attrib & 0x10) {
                                 // directory entry
                                 if (secondPos == '.')
-                                    strcpy(_filename, "(map terug)");
+                                    strcpy(_filename, "(terug)");
+                                sprintf(vidmem + 0x50*(display_fctr+1) + 3, "%c%-26.26s  (map)", COL_CYAN, _filename);
 
-                                strcpy(vidmem + 0x50*(display_fctr+2) + 4, _filename);
-                                vidmem[0x50*(display_fctr+2) + 4 + strlen(_filename)] = '/';
+                                // strcpy(vidmem + 0x50*(display_fctr+1) + 4, _filename);
+                                // vidmem[0x50*(display_fctr+DISPLAY_OFFSET) + 4 + strlen(_filename)] = '/';
                             } else {
                                 // file entry          
-                                strcpy(vidmem + 0x50*(display_fctr+2) + 4, _filename);
+                                //strcpy(vidmem + 0x50*(display_fctr+DISPLAY_OFFSET) + 4, _filename);
+                                _filesize_current_file = ram_read_uint32_t(loc + 0x1C);
+                                sprintf(vidmem + 0x50*(display_fctr+1) + 3, "%c%-26.26s %6lu", COL_YELLOW, _filename, _filesize_current_file);
                             }
                         }
 
-                        if((fctr % PAGE_SIZE) == 0) {
-                            curr_page_number++;
-                            if (page_number > 0 && curr_page_number > page_number) {
-                                return;
-                            }
-                        }
+                        if (!count_pages && display_fctr == PAGE_SIZE)
+                           return;
 
-                        if(page_number == 0 && fctr > 1 && ((fctr-1) % 16) == 0) {
-                            _num_of_pages++;
+                        // cache ctr and fctr for this page
+                        if (count_pages) {
+                            if (ctr != prev_ctr) {
+                                prev_ctr_start_fctr = fctr - 1;
+                                prev_ctr = ctr;
+                            }
+                            if ((fctr-1) % PAGE_SIZE == 0) {
+                                if (fctr > 1) _num_of_pages++;
+                                ram_write_uint8_t(SDCACHE2 + _num_of_pages-1, ctr);
+                                ram_write_uint16_t(SDCACHE3 + 2 * (_num_of_pages-1), prev_ctr_start_fctr);
+                            }
                         }
                     }
                     lfn_found = 0; // reset LFN tracking 
