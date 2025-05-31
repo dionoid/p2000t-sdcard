@@ -158,8 +158,6 @@ void read_folder(uint8_t page_number, uint8_t count_pages) {
 
     if (!count_pages) {
         //look up cached jumptable
-        //ctr = _ctr_cache[page_number-1];
-        //fctr = _fctr_cache[page_number-1];
         ctr = ram_read_uint8_t(SDCACHE2 + page_number-1);
         fctr = ram_read_uint16_t(SDCACHE3 + 2 * (page_number-1));
         //sprintf(vidmem + 0x50*21, "ctr: %d, fctr: %d  ", ctr, fctr);

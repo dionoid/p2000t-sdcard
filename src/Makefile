@@ -71,7 +71,6 @@ launcher-slot1: main.c commands.c fat32.c memory.c terminal.c sdcard.c sdcard.as
 
 mini-launcher: mini-launcher.c fat32-mini.c memory.c sdcard.c sst39sf.c sdcard.asm ram.asm rom.asm launch_cas.asm sst39sf.asm
 	zcc \
-	-D_EASY_MODE \
 	+embedded -clib=sdcc_iy \
 	mini-launcher.c fat32-mini.c memory.c sdcard.c sst39sf.c \
 	sdcard.asm ram.asm rom.asm launch_cas.asm sst39sf.asm \

@@ -23,11 +23,7 @@
 
 #define F_LL_SIZE               16
 #define MAX_LFN_LENGTH          26 // 2 * 13
-#ifdef EASY_MODE
-#define PAGE_SIZE               15 // number of files per page
-#else
 #define PAGE_SIZE               19 // number of files per page
-#endif
 #define DISPLAY_OFFSET           2
 
 #include "sdcard.h"
