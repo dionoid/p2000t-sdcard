@@ -35,7 +35,7 @@ uint8_t _num_of_pages = 1;
 
 uint8_t _filename[MAX_LFN_LENGTH+1];
 char _ext[4] = {0};
-char _short_name[9] = {0};
+char _base_name[9] = {0};
 uint8_t _current_attrib = 0;
 
 /**
@@ -117,6 +117,7 @@ uint32_t find_file(uint16_t file_id) {
 
                         if (file_id == fctr) {
                             //_current_attrib = attrib; // store current attrib byte
+                            copy_from_ram(loc, _base_name, 8);
                             copy_from_ram(loc+8, _ext, 3);
                             _filesize_current_file = ram_read_uint32_t(loc + 0x1C);
                             return grab_cluster_address_from_fileblock(loc);
@@ -242,7 +243,7 @@ void read_folder(uint8_t page_number, uint8_t count_pages) {
                                 // directory entry
                                 if (secondPos == '.')
                                     strcpy(_filename, "(terug)");
-                                sprintf(vidmem + 0x50*(display_fctr+1) + 3, "%c%-26.26s  (map)", COL_CYAN, _filename);
+                                sprintf(vidmem + 0x50*(display_fctr+DISPLAY_OFFSET) + 3, "%c%-26.26s  (map)", COL_CYAN, _filename);
 
                                 // strcpy(vidmem + 0x50*(display_fctr+1) + 4, _filename);
                                 // vidmem[0x50*(display_fctr+DISPLAY_OFFSET) + 4 + strlen(_filename)] = '/';
@@ -250,7 +251,7 @@ void read_folder(uint8_t page_number, uint8_t count_pages) {
                                 // file entry          
                                 //strcpy(vidmem + 0x50*(display_fctr+DISPLAY_OFFSET) + 4, _filename);
                                 _filesize_current_file = ram_read_uint32_t(loc + 0x1C);
-                                sprintf(vidmem + 0x50*(display_fctr+1) + 3, "%c%-26.26s %6lu", COL_YELLOW, _filename, _filesize_current_file);
+                                sprintf(vidmem + 0x50*(display_fctr+DISPLAY_OFFSET) + 3, "%c%-26.26s %6lu", COL_YELLOW, _filename, _filesize_current_file);
                             }
                         }
 

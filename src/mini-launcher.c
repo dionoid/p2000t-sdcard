@@ -30,15 +30,24 @@
 #include "ram.h"
 #include "fat32-mini.h"
 #include "launch_cas.h"
+#include "sst39sf.h"
+
+#ifdef EASY_MODE
+#define MINI_LAUNCHER_VERSION "0.1e"
+#else
+#define MINI_LAUNCHER_VERSION "0.1"
+#endif
 
 // set printf io
 #pragma printf "%d %c %s %lu"
 
 // function prototypes
 void init(void);
+void show_status(const char* str);
 void clearscreen(void);
-void clear_status_line(void);
 void update_pagination(void);
+void store_file_rom(uint32_t faddr, uint16_t rom_addr);
+uint8_t flash_rom(uint32_t faddr);
 
 // dummy terminal functions
 void print_error(char* str) { (void)str; }
@@ -51,7 +60,7 @@ uint8_t page_num = 1;
 void highlight_refresh(void) {
     // update highlight
     uint8_t is_folder = 0;
-    for (uint8_t i = 1; i <= 16; i++) {
+    for (uint8_t i = 1; i <= PAGE_SIZE; i++) {
         is_folder = vidmem[0x50*(i+DISPLAY_OFFSET) + 36] == ')';
         memcpy(vidmem + 0x50*(i+DISPLAY_OFFSET) + 2, (i == highlight_id) ? "\x07\x3E" : (is_folder ? " \x06" : " \x03"), 2);
     }
@@ -60,9 +69,6 @@ void highlight_refresh(void) {
 void main(void) {
     // initialize SD card
     init();
-
-    // setup screen
-    clearscreen();
 
     // build linked list for the root directory
     build_linked_list(_current_folder_cluster);
@@ -108,7 +114,7 @@ void main(void) {
                         read_folder(page_num, 0);
                         update_pagination();
                     }
-                    for (int8_t i = 16; i >= 0; i--) {
+                    for (int8_t i = PAGE_SIZE; i >= 0; i--) {
                         if (vidmem[0x50*(i+DISPLAY_OFFSET) + 4] != 0x00) {
                             highlight_id = i;
                             break;
@@ -166,6 +172,14 @@ void main(void) {
 
                     }
                     else {
+                        if (memcmp(_base_name, "LAUNCHER", 8) == 0 && memcmp(_ext, "BIN", 3 ) == 0) {
+                            show_status("\x03Firmware vernieuwen...");
+                            if (flash_rom(cluster))
+                                call_addr(0x1010); //cold reset
+                            else
+                                continue;
+                        }
+
                         if (memcmp(_ext, "CAS", 3) != 0 && memcmp(_ext, "PRG", 3) != 0) {
                             // unsupported file type
                             vidmem[0x50*(highlight_id + DISPLAY_OFFSET) + 2] = 0x01; // color line red
@@ -177,10 +191,9 @@ void main(void) {
                         if (memcmp(_ext, "CAS", 3) == 0) {
                             // set RAM bank to CASSETTE
                             set_ram_bank(RAM_BANK_CASSETTE);
-                            clear_status_line();
-                            strcpy(vidmem + 0x50*21, "\x03Loading file...");
+                            show_status("\x03Programma laden...");
                             store_cas_ram(_linkedlist[0], 0x0000);
-                            set_ram_bank(0);
+                            set_ram_bank(RAM_BANK_CACHE);
                             // if CODE was pressed, load and return to Basic, otherwise load and run
                             launch_cas(key0 == 32 ? 0x1FC6 : 0x28d4);
                         }
@@ -212,6 +225,7 @@ restore_state:
     }
 }
 
+#ifdef EASY_MODE
 static const uint8_t bottom_bar[] = {
     0x13, 0x00, 0x00, 0x60, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x60, 0x00, 0x00, 0x00, 0x00, 0x3C, 0x2C, 0x2C, 0x2C, 0x2C, 0x2C, 0x2C, 0x2C, 0x2C, 0x2C, 0x6C, 0x00, 0x00, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x00, 0x00,
     0x13, 0x00, 0x28, 0x3D, 0x2C, 0x00, 0x00, 0x00, 0x00, 0x28, 0x6B, 0x29, 0x00, 0x00, 0x00, 0x35, 0x00, 0x00, 0x45, 0x4E, 0x54, 0x45, 0x52, 0x00, 0x00, 0x6A, 0x00, 0x00, 0x00, 0x30, 0x35, 0x30, 0x00, 0x00, 0x00, 0x00, 0x2C, 0x6E, 0x24, 0x00,
@@ -219,30 +233,36 @@ static const uint8_t bottom_bar[] = {
     0x06, 0x50, 0x61, 0x67, 0x69, 0x6E, 0x61, 0x00, 0x53, 0x63, 0x72, 0x6F, 0x6C, 0x6C, 0x00, 0x00, 0x53, 0x74, 0x61, 0x72, 0x74, 0x00, 0x41, 0x70, 0x70, 0x00, 0x00, 0x53, 0x63, 0x72, 0x6F, 0x6C, 0x6C, 0x00, 0x50, 0x61, 0x67, 0x69, 0x6E, 0x61,
     0x06, 0x54, 0x65, 0x72, 0x75, 0x67, 0x00, 0x00, 0x4F, 0x6D, 0x68, 0x6F, 0x6F, 0x67, 0x00, 0x00, 0x4F, 0x70, 0x65, 0x6E, 0x00, 0x00, 0x4D, 0x61, 0x70, 0x00, 0x00, 0x4F, 0x6D, 0x6C, 0x61, 0x61, 0x67, 0x00, 0x00, 0x00, 0x48, 0x65, 0x65, 0x6E
 };
+#endif
 
 void clearscreen(void) {
     // clear screen
     memset(vidmem, 0x00, 0x780);
-    strcpy(vidmem, "\x06P2000T SD-CARD");
-    for (uint8_t i = 1; i < 19; i++) {
+    strcpy(vidmem, "\x06\x0DP2000T SD-CARD\x0Cv"MINI_LAUNCHER_VERSION);
+#ifdef EASY_MODE
+    for (uint8_t i = 2; i < 19; i++) {
         strcpy(vidmem + 0x50*i, "\x04\x1D");
     }
     for (uint8_t i = 0; i < 5; i++) {
         memcpy(vidmem + 0x50 * (19 + i), bottom_bar + i * 40, 40);
     }
+#else
+    for (uint8_t i = 2; i < 23; i++) {
+        strcpy(vidmem + 0x50*i, "\x04\x1D");
+    }
+#endif
 }
 
 void update_pagination(void) {
     char pagina_str[32];
-    sprintf(pagina_str, " \x03Pagina %d van %d", page_num, _num_of_pages);
+    sprintf(pagina_str, "\x03Pagina %d van %d", page_num, _num_of_pages);
     strcpy(vidmem + 39 - strlen(pagina_str), pagina_str);
 }
 
-void clear_status_line(void) {
-    memset(vidmem + 0x50 * 19, 0x00, 5 * 0x50); // clear status line
-}
-
 void init(void) {
+    // clear/setup screen
+    clearscreen();
+
     // deactivate SD-card
     sdcs_set();
 
@@ -255,8 +275,68 @@ void init(void) {
     // activate and mount sd card
     uint32_t lba0;
     if(init_sdcard() != 0 || (lba0 = read_mbr()) == 0) {
-        strcpy(vidmem + 0x50*10, "\x01Cannot connect to SD-CARD.");
+        show_status("\x01Kan geen FAT32 SD kaart vinden.");
         for(;;){}
     }
     read_partition(lba0);
+}
+
+uint8_t flash_rom(uint32_t faddr) {
+    set_rom_bank(ROM_BANK_DEFAULT);
+    set_ram_bank(RAM_BANK_CACHE);
+    uint16_t rom_id = sst39sf_get_device_id();
+
+    if(rom_id == 0xB5BF || rom_id == 0xB6BF || rom_id == 0xB7BF) {
+        // Wiping 0x0000-0x3FFF
+        for(uint8_t i=0; i<4; i++) {
+            sst39sf_wipe_sector(0x1000 * i);
+        }
+        // copying from SD-CARD to ROM
+        store_file_rom(faddr, 0x0000);
+        return 1;
+    } else {
+        show_status("\x01Onbekend SST39SF apparaatnummer.");
+        return 0;
+    }
+}
+
+/**
+ * @brief Store a file in the external ROM
+ * 
+ * @param faddr    cluster address of the file
+ * @param rom_addr first position in ROM to store the file
+ * 
+ * @return number of sectors stored
+ */
+void store_file_rom(uint32_t faddr, uint16_t rom_addr) {
+    build_linked_list(faddr);
+    // count number of sectors
+    uint8_t total_sectors = _filesize_current_file / 512;
+    if(_filesize_current_file % 512 != 0) total_sectors++;
+
+    uint8_t ctr = 0;    // counter for clusters
+    uint8_t scctr = 0;  // counter for sectors
+    while(_linkedlist[ctr] != 0xFFFFFFFF && ctr < 16 && scctr < total_sectors) {
+        const uint32_t caddr = calculate_sector_address(_linkedlist[ctr], 0);
+        for(uint8_t i=0; i<_sectors_per_cluster; i++) {
+            // directly transfer data to ROM chip
+            open_command();
+            cmd17(caddr + i);
+            fast_sd_to_rom_full(rom_addr);
+            close_command();
+            // increment memory pointer
+            rom_addr += 0x200;
+            if(++scctr == total_sectors) break;
+        }
+        ctr++;
+    }
+}
+
+void show_status(const char* str) {
+#ifdef EASY_MODE
+    memset(vidmem + 0x50 * 19, 0x00, 5 * 0x50); // clear bottom bar
+    strcpy(vidmem + 0x50*21, str);
+#else
+    strcpy(vidmem + 0x50*23, str);
+#endif
 }

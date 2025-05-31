@@ -23,8 +23,12 @@
 
 #define F_LL_SIZE               16
 #define MAX_LFN_LENGTH          26 // 2 * 13
-#define PAGE_SIZE               16 // number of files per page
-#define DISPLAY_OFFSET           1
+#ifdef EASY_MODE
+#define PAGE_SIZE               15 // number of files per page
+#else
+#define PAGE_SIZE               19 // number of files per page
+#endif
+#define DISPLAY_OFFSET           2
 
 #include "sdcard.h"
 #include "util.h"
@@ -46,6 +50,7 @@ extern uint32_t _current_folder_cluster;
 // global variables for currently active file or folder
 extern uint32_t _filesize_current_file;
 extern uint8_t _filename[]; // filename buffer
+extern char _base_name[9];
 extern char _ext[4]; // file extension (3 chars, uppercased)
 extern uint8_t _current_attrib;
 extern uint8_t _num_of_pages;
