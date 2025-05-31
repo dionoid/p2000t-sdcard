@@ -69,11 +69,11 @@ launcher-slot1: main.c commands.c fat32.c memory.c terminal.c sdcard.c sdcard.as
 	&& mv LAUNCHER-SLOT1.bin LAUNCHER-SLOT1.BIN \
 	&& wc -c < LAUNCHER-SLOT1.BIN
 
-mini-launcher: mini-launcher.c fat32-mini.c memory.c sdcard.c sdcard.asm ram.asm rom.asm mini-launcher.asm
+mini-launcher: mini-launcher.c fat32-mini.c memory.c sdcard.c sdcard.asm ram.asm rom.asm launch_cas.asm
 	zcc \
 	+embedded -clib=sdcc_iy \
 	mini-launcher.c fat32-mini.c memory.c sdcard.c \
-	sdcard.asm ram.asm rom.asm mini-launcher.asm \
+	sdcard.asm ram.asm rom.asm launch_cas.asm \
 	-startup=0 \
 	-pragma-define:CRT_ORG_CODE=0x7000 \
 	-pragma-define:REGISTER_SP=-1 \

@@ -29,6 +29,7 @@
 #include "memory.h"
 #include "ram.h"
 #include "fat32-mini.h"
+#include "launch_cas.h"
 
 // set printf io
 #pragma printf "%d %c %s %lu"
@@ -38,9 +39,6 @@ void init(void);
 void clearscreen(void);
 void clear_status_line(void);
 void update_pagination(void);
-void call_addr(uint16_t addr) __z88dk_fastcall;
-// void store_screen(void) __z88dk_fastcall;
-// void restore_screen(void) __z88dk_fastcall;
 
 // dummy terminal functions
 void print_error(char* str) { (void)str; }
@@ -82,8 +80,18 @@ void main(void) {
             if(key0 == 21)  {
                 if (vidmem[0x50*(highlight_id+DISPLAY_OFFSET+1) + 4] != 0x00)
                     highlight_id++;
-                else
-                    highlight_id = 1; // wrap around
+                else {
+                    page_num++;
+                    if (page_num > _num_of_pages) {
+                        page_num = 1; // wrap around
+                    }
+                    if (_num_of_pages > 1) {
+                        clearscreen();
+                        read_folder(page_num, 0);
+                        update_pagination();
+                    }
+                    highlight_id = 1; // highlight first item in newly loaded folder
+                }
                 highlight_refresh();
             }
             // key up
@@ -91,6 +99,15 @@ void main(void) {
                 if (highlight_id > 1)
                     highlight_id--;
                 else {
+                    page_num--;
+                    if (page_num == 0) {
+                        page_num = _num_of_pages; // wrap around
+                    }
+                    if (_num_of_pages > 1) {
+                        clearscreen();
+                        read_folder(page_num, 0);
+                        update_pagination();
+                    }
                     for (int8_t i = 16; i >= 0; i--) {
                         if (vidmem[0x50*(i+DISPLAY_OFFSET) + 4] != 0x00) {
                             highlight_id = i;
@@ -129,7 +146,7 @@ void main(void) {
                 highlight_refresh();
             }
             // space or enter key
-            if(key0 == 17 || key0 == 52)  { // space or enter
+            if(key0 == 17 || key0 == 52 || key0 == 32)  { // space or enter or CODE
                 uint32_t cluster = find_file(highlight_id + PAGE_SIZE * (page_num-1));
                 if(cluster != _root_dir_first_cluster) {
                     if(_current_attrib & 0x10) {
@@ -164,7 +181,8 @@ void main(void) {
                             strcpy(vidmem + 0x50*21, "\x03Loading file...");
                             store_cas_ram(_linkedlist[0], 0x0000);
                             set_ram_bank(0);
-                            break; // break out of the loop to run the program
+                            // if CODE was pressed, load and return to Basic, otherwise load and run
+                            launch_cas(key0 == 32 ? 0x1FC6 : 0x28d4);
                         }
 
                         // load PRG into internal RAM
