@@ -234,8 +234,7 @@ void read_folder(uint8_t page_number, uint8_t count_pages) {
 
                             if(_current_attrib & 0x10) {
                                 // directory entry
-                                if (secondPos == '.')
-                                    strcpy(_filename, "(terug)");
+                                if (secondPos == '.') strcpy(_filename, "(terug)");
                                 sprintf(vidmem + 0x50*(display_fctr+DISPLAY_OFFSET) + 3, "%c%-26.26s  (map)", COL_CYAN, _filename);
                             } else {
                                 // file entry          

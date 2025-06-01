@@ -179,7 +179,7 @@ void main(void) {
                     }
                     else {
                         if ((memcmp(_base_name, "LAUNCHER", 8) == 0 || memcmp(_base_name, "EZLAUNCH", 8) == 0) && memcmp(_ext, "BIN", 3 ) == 0) {
-                            show_status("\x03Firmware vernieuwen...");
+                            show_status("\003Firmware vernieuwen...");
                             if (flash_rom(cluster))
                                 call_addr(0x1010); //cold reset after firmware flashing
                             else
@@ -197,7 +197,7 @@ void main(void) {
                         if (memcmp(_ext, "CAS", 3) == 0) {
                             // set RAM bank to CASSETTE
                             set_ram_bank(RAM_BANK_CASSETTE);
-                            show_status("\x03Programma laden...");
+                            show_status("\003Programma laden...");
                             store_cas_ram(_linkedlist[0], 0x0000);
                             set_ram_bank(RAM_BANK_CACHE);
                             // if CODE was pressed, load and return to Basic, otherwise load and run
@@ -234,16 +234,16 @@ restore_state:
 void clearscreen(void) {
     // clear screen
     memset(vidmem, 0x00, 0x780);
-    strcpy(vidmem, "\x06\x0DP2000T SD-CARD\x0Cv"EZ_LAUNCHER_VERSION);
+    strcpy(vidmem, "\006\013P2000T SD-CARD\012v"EZ_LAUNCHER_VERSION);
     for (uint8_t i = 2; i < 23; i++) {
-        strcpy(vidmem + 0x50*i, "\x04\x1D");
+        strcpy(vidmem + 0x50*i, "\004\x1D");
     }
     strcpy(vidmem + 0x50*23 + 20, "\002 Toets H voor Hulp");
 }
 
 void update_pagination(void) {
     char pagina_str[32];
-    sprintf(pagina_str, "\x03Pagina %d van %d", page_num, _num_of_pages);
+    sprintf(pagina_str, "\003Pagina %d van %d", page_num, _num_of_pages);
     strcpy(vidmem + 39 - strlen(pagina_str), pagina_str);
 }
 
@@ -260,7 +260,7 @@ void init(void) {
     // activate and mount sd card
     uint32_t lba0;
     if(init_sdcard() != 0 || (lba0 = read_mbr()) == 0) {
-        show_status("\x01Kan geen FAT32 SD kaart vinden.");
+        show_status("\001Kan geen FAT32 SD kaart vinden.");
         for(;;){}
     }
     read_partition(lba0);
@@ -280,7 +280,7 @@ uint8_t flash_rom(uint32_t faddr) {
         store_file_rom(faddr, 0x0000);
         return 1;
     } else {
-        show_status("\x01Onbekend SST39SF apparaatnummer.");
+        show_status("\001Onbekend SST39SF apparaatnummer.");
         return 0;
     }
 }
