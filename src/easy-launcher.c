@@ -94,7 +94,7 @@ void main(void) {
                     memcpy(vidmem + 0x50 * (8 + i), bottom_bar + i * 40, 40);
                 }
                 strcpy(vidmem + 0x50*14, "\003Tips:");
-                strcpy(vidmem + 0x50*15, "\003*\007Spatiebalk werkt zoals Enter");
+                strcpy(vidmem + 0x50*15, "\003*\007Spatiebalk werkt ook i.p.v. Enter");
                 strcpy(vidmem + 0x50*16, "\003*\007CODE toets: LOAD en terug naar Basic");
 
                 while(keymem[0x0C] == 0) {} // wait until a key is pressed
