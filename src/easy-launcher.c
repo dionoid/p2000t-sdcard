@@ -234,8 +234,8 @@ restore_state:
 void clearscreen(void) {
     // clear screen
     memset(vidmem, 0x00, 0x780);
-    strcpy(vidmem, "\006\013P2000T SD-CARD\012v"EZ_LAUNCHER_VERSION);
-    for (uint8_t i = 2; i < 23; i++) {
+    strcpy(vidmem, "\006 P2000T SD-CARD\002v"EZ_LAUNCHER_VERSION);
+    for (uint8_t i = 2; i < 22; i++) {
         strcpy(vidmem + 0x50*i, "\004\x1D");
     }
     strcpy(vidmem + 0x50*23 + 20, "\002 Toets H voor Hulp");

@@ -24,7 +24,7 @@
 
 #define F_LL_SIZE               16
 #define MAX_LFN_LENGTH          26 // 2 * 13 (LFN entries come in 13 byte chunks)
-#define PAGE_SIZE               19 // max number of files displayed on a page
+#define PAGE_SIZE               18 // max number of files displayed on a page
 #define DISPLAY_OFFSET           2 // line-offset in the video memory for displaying files
 
 #include "sdcard.h"
