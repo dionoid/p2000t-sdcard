@@ -193,73 +193,70 @@ uint32_t read_folder(int16_t file_id, uint8_t casrun) {
 
                 // check for SFN entry
                 if((_current_attrib & 0x0F) == 0x00) {
-                    // capture metadata
-                    fctr++;
-                    if (file_id < 0 || fctr == file_id) {
-                        const uint32_t fc = grab_cluster_address_from_fileblock(loc);
-                        _filesize_current_file = ram_read_uint32_t(loc + 0x1C);
-                        totalfilesize += _filesize_current_file;
-                        
-                        // copy extension
-                        copy_from_ram(loc+0x08, _ext, 3);
+                    if(firstPos != '.' || ram_read_uint8_t(loc+1) == '.') { // skip dotfiles but keep ".." parent folder
+                        // capture metadata
+                        fctr++;
+                        if (file_id < 0 || fctr == file_id) {
+                            const uint32_t fc = grab_cluster_address_from_fileblock(loc);
+                            _filesize_current_file = ram_read_uint32_t(loc + 0x1C);
+                            totalfilesize += _filesize_current_file;
+                            
+                            // copy extension
+                            copy_from_ram(loc+0x08, _ext, 3);
 
-                        // if no LFN found, the SFN filename needs to be formatted
-                        if (!lfn_found) {
-                            copy_from_ram(loc, _filename, 8);
-                            memcpy(&_filename[9], _ext, 4); // copy extension (incl terminator)
-                            // if file, inject dot before extension
-                            _filename[8] = (_current_attrib & 0x10) ? '\0' : '.';
-                            // remove superfluous spaces before extension
-                            // uint8_t k = 0;
-                            // for (k = 7; k >= 1 && _filename[k] == ' '; k--);
-                            // if (k < 7) memcpy(&_filename[k+1], &_filename[8], 5);
-                        }
+                            // if no LFN found, the SFN filename needs to be formatted
+                            if (!lfn_found) {
+                                copy_from_ram(loc, _filename, 8);
+                                memcpy(&_filename[9], _ext, 4); // copy extension (incl terminator)
+                                // if file, inject dot before extension
+                                _filename[8] = (_current_attrib & 0x10) ? '\0' : '.';
+                            }
 
-                        if(file_id < 0) {
-                            if(_current_attrib & 0x10) { // directory entry
-                                sprintf(termbuffer, "%c%3u%c%-24.24s%c (dir)", COL_YELLOW, fctr, COL_WHITE, _filename, COL_CYAN);
-                            } else {             // file entry
-                                if(casrun == 1 && memcmp(_ext, "CAS", 3) == 0) {    // cas file
-                                    // read from SD card once more and extract CAS data
-                                    open_command();
-                                    cmd17(calculate_sector_address(fc, 0));
-                                    fast_sd_to_ram_first_0x100(SDCACHE1);
-                                    close_command();
+                            if(file_id < 0) {
+                                if(_current_attrib & 0x10) { // directory entry
+                                    sprintf(termbuffer, "%c%3u%c%-24.24s%c (dir)", COL_YELLOW, fctr, COL_WHITE, _filename, COL_CYAN);
+                                } else {             // file entry
+                                    if(casrun == 1 && memcmp(_ext, "CAS", 3) == 0) {    // cas file
+                                        // read from SD card once more and extract CAS data
+                                        open_command();
+                                        cmd17(calculate_sector_address(fc, 0));
+                                        fast_sd_to_ram_first_0x100(SDCACHE1);
+                                        close_command();
 
-                                    // grab CAS metadata
-                                    uint8_t casname[16];
-                                    uint8_t ext[3];
-                                    copy_from_ram(SDCACHE1 + 0x36, casname, 8);
-                                    copy_from_ram(SDCACHE1 + 0x47, &casname[8], 8);
-                                    copy_from_ram(SDCACHE1 + 0x3E, ext, 3);
+                                        // grab CAS metadata
+                                        uint8_t casname[16];
+                                        uint8_t ext[3];
+                                        copy_from_ram(SDCACHE1 + 0x36, casname, 8);
+                                        copy_from_ram(SDCACHE1 + 0x47, &casname[8], 8);
+                                        copy_from_ram(SDCACHE1 + 0x3E, ext, 3);
 
-                                    // replace terminating characters (0x00) by spaces (0x20)
-                                    replace_bytes(casname, 0x00, 0x20, 16);
-                                    replace_bytes(ext, 0x00, 0x20, 3);
+                                        // replace terminating characters (0x00) by spaces (0x20)
+                                        replace_bytes(casname, 0x00, 0x20, 16);
+                                        replace_bytes(ext, 0x00, 0x20, 3);
 
-                                    const uint16_t filesize = ram_read_uint16_t(SDCACHE1 + 0x32);
-                                    const uint8_t blocks = ram_read_uint8_t(SDCACHE1 + 0x4F);
-                                    sprintf(termbuffer, "%c%3u%c%.16s %.3s%c%2i  %6u", COL_GREEN, fctr, COL_YELLOW, casname, ext, COL_CYAN, blocks, filesize);
-                                } else { // non-cas file or not a cas run
-                                    sprintf(termbuffer, "%c%3u%c%-24.24s%c%6lu", COL_GREEN, fctr, COL_WHITE, _filename, COL_YELLOW, _filesize_current_file);
+                                        const uint16_t filesize = ram_read_uint16_t(SDCACHE1 + 0x32);
+                                        const uint8_t blocks = ram_read_uint8_t(SDCACHE1 + 0x4F);
+                                        sprintf(termbuffer, "%c%3u%c%.16s %.3s%c%2i  %6u", COL_GREEN, fctr, COL_YELLOW, casname, ext, COL_CYAN, blocks, filesize);
+                                    } else { // non-cas file or not a cas run
+                                        sprintf(termbuffer, "%c%3u%c%-24.24s%c%6lu", COL_GREEN, fctr, COL_WHITE, _filename, COL_YELLOW, _filesize_current_file);
+                                    }
+                                }
+                                terminal_printtermbuffer();
+
+                                if(fctr % 16 == 0) {
+                                    print_recall("-- Press key to continue, q to quit --");
+                                    if(wait_for_key_fixed(3) == 1) {
+                                        stopreading = 1;
+                                        break;
+                                    }
                                 }
                             }
-                            terminal_printtermbuffer();
 
-                            if(fctr % 16 == 0) {
-                                print_recall("-- Press key to continue, q to quit --");
-                                if(wait_for_key_fixed(3) == 1) {
-                                    stopreading = 1;
-                                    break;
-                                }
+                            if(fctr == file_id) {
+                                return fc;
                             }
-                        }
-
-                        if(fctr == file_id) {
-                            return fc;
                         }
                     }
-
                     lfn_found = 0; // reset LFN tracking 
                 }
                 loc += 32;  // next file entry location

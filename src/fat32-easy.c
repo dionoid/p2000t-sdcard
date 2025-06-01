@@ -1,6 +1,7 @@
 /**************************************************************************
  *                                                                        *
- *   Author: Ivo Filot <ivo@ivofilot.nl>                                  *
+ *   Author(s): Ivo Filot <ivo@ivofilot.nl>                               *
+ *              Dion Olsthoorn <@dionoid>                                 *
  *                                                                        *
  *   P2000T-SDCARD is free software:                                      *
  *   you can redistribute it and/or modify it under the terms of the      *
@@ -18,7 +19,7 @@
  *                                                                        *
  **************************************************************************/
 
-#include "fat32-mini.h"
+#include "fat32-easy.h"
 
 uint8_t _sectors_per_cluster = 0;
 uint16_t _reserved_sectors = 0;
@@ -150,17 +151,16 @@ void read_folder(uint8_t page_number, uint8_t count_pages) {
     uint16_t loc = 0;               // current entry position
     uint8_t firstPos = 0;
     uint8_t lfn_found = 0; 
-    uint8_t show_names;
+    uint8_t display_next_file = 0; // whether to display next file
     uint16_t prev_ctr_start_fctr = 0;
     uint32_t prev_ctr = 0;
     uint16_t display_fctr = 0;
     uint32_t caddr = 0;             // current sector address
 
     if (!count_pages) {
-        //look up cached jumptable
+        //look up cached jumptable for fast page access
         ctr = ram_read_uint8_t(SDCACHE2 + page_number-1);
         fctr = ram_read_uint16_t(SDCACHE3 + 2 * (page_number-1));
-        //sprintf(vidmem + 0x50*21, "ctr: %d, fctr: %d  ", ctr, fctr);
     }
 
     while(_linkedlist[ctr] != 0xFFFFFFFF && ctr < F_LL_SIZE) {
@@ -183,15 +183,12 @@ void read_folder(uint8_t page_number, uint8_t count_pages) {
                 }
 
                 // early exit if a zero is read
-                if(firstPos == 0x00) {
-                    return;
-                }
+                if(firstPos == 0x00) return;
 
-                show_names = (display_fctr < PAGE_SIZE) && (page_number == fctr / PAGE_SIZE + 1); // current page number based on file count
-                //show_names = curr_page_number == page_number || (page_number == 0 && curr_page_number == 1);
+                display_next_file = (display_fctr < PAGE_SIZE) && (page_number == fctr / PAGE_SIZE + 1); // current page number based on file count
 
                 // check for LFN entry
-                if (show_names) {
+                if (display_next_file) {
                     if ((_current_attrib & 0x0F) == 0x0F) {
                         if (!lfn_found) {
                             lfn_found = 1;  // indicate LNF found
@@ -212,12 +209,10 @@ void read_folder(uint8_t page_number, uint8_t count_pages) {
                 if((_current_attrib & 0x0F) == 0x00) {
 
                     uint8_t secondPos = ram_read_uint8_t(loc+1);
-
-                    if(!(_current_attrib & 0x10) || firstPos != '.' || secondPos == '.') {
+                    if(firstPos != '.' || secondPos == '.') { // skip dotfiles but keep ".." parent folder
 
                         fctr++;
-
-                        if (show_names) {
+                        if (display_next_file) {
                             display_fctr++;
 
                             // if no LFN found, the SFN filename needs to be formatted
@@ -233,28 +228,24 @@ void read_folder(uint8_t page_number, uint8_t count_pages) {
                                 if (k < 7) memcpy(&_filename[k+1], &_filename[8], 5); // 5 = "." + ext + '\0'
                             }
 
-                            // char _temp[9] = {0};
+                            // char _debug[9] = {0};
                             // copy_from_ram(loc, _temp, 8);
-                            // sprintf(vidmem + 0x50*(display_fctr+DISPLAY_OFFSET) + 4, "%s: ctr %d, caddr %d", _temp, ctr, caddr);
+                            // sprintf(vidmem + 0x50*(display_fctr+DISPLAY_OFFSET) + 4, "%s: ctr %d, caddr %d", _debug, ctr, caddr);
 
                             if(_current_attrib & 0x10) {
                                 // directory entry
                                 if (secondPos == '.')
                                     strcpy(_filename, "(terug)");
                                 sprintf(vidmem + 0x50*(display_fctr+DISPLAY_OFFSET) + 3, "%c%-26.26s  (map)", COL_CYAN, _filename);
-
-                                // strcpy(vidmem + 0x50*(display_fctr+1) + 4, _filename);
-                                // vidmem[0x50*(display_fctr+DISPLAY_OFFSET) + 4 + strlen(_filename)] = '/';
                             } else {
                                 // file entry          
-                                //strcpy(vidmem + 0x50*(display_fctr+DISPLAY_OFFSET) + 4, _filename);
                                 _filesize_current_file = ram_read_uint32_t(loc + 0x1C);
                                 sprintf(vidmem + 0x50*(display_fctr+DISPLAY_OFFSET) + 3, "%c%-26.26s %6lu", COL_YELLOW, _filename, _filesize_current_file);
                             }
                         }
 
                         if (!count_pages && display_fctr == PAGE_SIZE)
-                           return;
+                           return; // when full page is displayed, exit
 
                         // cache ctr and fctr for this page
                         if (count_pages) {

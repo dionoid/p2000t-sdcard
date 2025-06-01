@@ -1,6 +1,7 @@
 /**************************************************************************
  *                                                                        *
- *   Author: Ivo Filot <ivo@ivofilot.nl>                                  *
+ *   Author(s): Ivo Filot <ivo@ivofilot.nl>                               *
+ *              Dion Olsthoorn <@dionoid>                                 *
  *                                                                        *
  *   P2000T-SDCARD is free software:                                      *
  *   you can redistribute it and/or modify it under the terms of the      *
@@ -28,11 +29,11 @@
 #include "ports.h"
 #include "memory.h"
 #include "ram.h"
-#include "fat32-mini.h"
+#include "fat32-easy.h"
 #include "launch_cas.h"
 #include "sst39sf.h"
 
-#define MINI_LAUNCHER_VERSION "0.1"
+#define EZ_LAUNCHER_VERSION "0.1"
 
 // set printf io
 #pragma printf "%d %c %s %lu"
@@ -45,18 +46,13 @@ void update_pagination(void);
 void store_file_rom(uint32_t faddr, uint16_t rom_addr);
 uint8_t flash_rom(uint32_t faddr);
 
-// dummy terminal functions
-void print_error(char* str) { (void)str; }
-void print(char* str) { (void)str; }
-void print_recall(char* str) { (void)str;}
-
 uint16_t highlight_id = 1;
 uint8_t page_num = 1;
 
 static const uint8_t bottom_bar[] = {
-    0x13, 0x00, 0x00, 0x60, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x60, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x00, 0x00,
+    0x13, 0x00, 0x00, 0x60, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x60, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x6C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x00, 0x00,
     0x13, 0x00, 0x28, 0x3D, 0x2C, 0x00, 0x00, 0x00, 0x00, 0x28, 0x6B, 0x29, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x45, 0x4E, 0x54, 0x45, 0x52, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x35, 0x30, 0x00, 0x00, 0x00, 0x00, 0x2C, 0x6E, 0x24, 0x00,
-    0x13, 0x00, 0x00, 0x22, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x22, 0x27, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x21, 0x00, 0x00,
+    0x13, 0x00, 0x00, 0x22, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2D, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x22, 0x27, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x21, 0x00, 0x00,
     0x06, 0x50, 0x61, 0x67, 0x69, 0x6E, 0x61, 0x00, 0x53, 0x63, 0x72, 0x6F, 0x6C, 0x6C, 0x00, 0x00, 0x53, 0x74, 0x61, 0x72, 0x74, 0x00, 0x41, 0x70, 0x70, 0x00, 0x00, 0x53, 0x63, 0x72, 0x6F, 0x6C, 0x6C, 0x00, 0x50, 0x61, 0x67, 0x69, 0x6E, 0x61,
     0x06, 0x54, 0x65, 0x72, 0x75, 0x67, 0x00, 0x00, 0x4F, 0x6D, 0x68, 0x6F, 0x6F, 0x67, 0x00, 0x00, 0x4F, 0x70, 0x65, 0x6E, 0x00, 0x00, 0x4D, 0x61, 0x70, 0x00, 0x00, 0x4F, 0x6D, 0x6C, 0x61, 0x61, 0x67, 0x00, 0x00, 0x00, 0x48, 0x65, 0x65, 0x6E
 };
@@ -70,15 +66,19 @@ void highlight_refresh(void) {
     }
 }
 
+void update_screen(uint8_t count_pages) {
+    // refresh the screen
+    clearscreen();
+    if (count_pages) build_linked_list(_current_folder_cluster);
+    read_folder(page_num, count_pages);
+    update_pagination();
+    highlight_refresh();
+}
+
 void main(void) {
     // initialize SD card
     init();
-
-    // build linked list for the root directory
-    build_linked_list(_current_folder_cluster);
-    read_folder(1, 1);
-    update_pagination();
-    highlight_refresh();
+    update_screen(1);
 
     // put in infinite loop and wait for program selection
     for(;;) {
@@ -100,33 +100,28 @@ void main(void) {
                 while(keymem[0x0C] == 0) {} // wait until a key is pressed
                 keymem[0x0C] = 0;
                                         
-                clearscreen();
-                read_folder(page_num, 0);
-                update_pagination();
-                highlight_refresh();
+                update_screen(0);
             }
             // key down
             if(key0 == 21)  {
-                if (vidmem[0x50*(highlight_id+DISPLAY_OFFSET+1) + 4] != 0x00)
+                if (vidmem[0x50*(highlight_id+DISPLAY_OFFSET+1) + 4] != 0x00) {
                     highlight_id++;
+                }
                 else {
                     page_num++;
                     if (page_num > _num_of_pages) {
                         page_num = 1; // wrap around
                     }
-                    if (_num_of_pages > 1) {
-                        clearscreen();
-                        read_folder(page_num, 0);
-                        update_pagination();
-                    }
                     highlight_id = 1; // highlight first item in newly loaded folder
+                    if (_num_of_pages > 1) update_screen(0);
                 }
                 highlight_refresh();
             }
             // key up
             if(key0 == 2)  {
-                if (highlight_id > 1)
+                if (highlight_id > 1) {
                     highlight_id--;
+                }
                 else {
                     page_num--;
                     if (page_num == 0) {
@@ -154,11 +149,8 @@ void main(void) {
                 } else {
                     page_num = 1; // wrap around
                 }
-                clearscreen();
-                read_folder(page_num, 0);
-                update_pagination();
                 highlight_id = 1; // highlight first item in newly loaded folder
-                highlight_refresh();
+                update_screen(0);
             }
             //key left
             if(key0 == 0)  {
@@ -168,11 +160,8 @@ void main(void) {
                 } else {
                     page_num = _num_of_pages; // wrap around
                 }
-                clearscreen();
-                read_folder(page_num, 0);
-                update_pagination();
                 highlight_id = 1; // highlight first item in newly loaded folder
-                highlight_refresh();
+                update_screen(0);
             }
             // space or enter key
             if(key0 == 17 || key0 == 52 || key0 == 32)  { // space or enter or CODE
@@ -184,21 +173,15 @@ void main(void) {
                         } else {
                             _current_folder_cluster = cluster;
                         }
-
-                        build_linked_list(_current_folder_cluster);
                         page_num = 1;
-                        clearscreen();
-                        read_folder(1, 1);
-                        update_pagination();
                         highlight_id = 1; // highlight first item in newly loaded folder
-                        highlight_refresh();
-
+                        update_screen(1);
                     }
                     else {
-                        if (memcmp(_base_name, "LAUNCHER", 8) == 0 && memcmp(_ext, "BIN", 3 ) == 0) {
+                        if ((memcmp(_base_name, "LAUNCHER", 8) == 0 || memcmp(_base_name, "EZLAUNCH", 8) == 0) && memcmp(_ext, "BIN", 3 ) == 0) {
                             show_status("\x03Firmware vernieuwen...");
                             if (flash_rom(cluster))
-                                call_addr(0x1010); //cold reset
+                                call_addr(0x1010); //cold reset after firmware flashing
                             else
                                 continue;
                         }
@@ -251,7 +234,7 @@ restore_state:
 void clearscreen(void) {
     // clear screen
     memset(vidmem, 0x00, 0x780);
-    strcpy(vidmem, "\x06\x0DP2000T SD-CARD\x0Cv"MINI_LAUNCHER_VERSION);
+    strcpy(vidmem, "\x06\x0DP2000T SD-CARD\x0Cv"EZ_LAUNCHER_VERSION);
     for (uint8_t i = 2; i < 23; i++) {
         strcpy(vidmem + 0x50*i, "\x04\x1D");
     }
@@ -265,9 +248,6 @@ void update_pagination(void) {
 }
 
 void init(void) {
-    // clear/setup screen
-    clearscreen();
-
     // deactivate SD-card
     sdcs_set();
 

@@ -69,10 +69,11 @@ launcher-slot1: main.c commands.c fat32.c memory.c terminal.c sdcard.c sdcard.as
 	&& mv LAUNCHER-SLOT1.bin LAUNCHER-SLOT1.BIN \
 	&& wc -c < LAUNCHER-SLOT1.BIN
 
-mini-launcher: mini-launcher.c fat32-mini.c memory.c sdcard.c sst39sf.c sdcard.asm ram.asm rom.asm launch_cas.asm sst39sf.asm
+ezlaunch: easy-launcher.c fat32-easy.c memory.c sdcard.c sst39sf.c sdcard.asm ram.asm rom.asm launch_cas.asm sst39sf.asm
 	zcc \
+	-DNON_VERBOSE \
 	+embedded -clib=sdcc_iy \
-	mini-launcher.c fat32-mini.c memory.c sdcard.c sst39sf.c \
+	easy-launcher.c fat32-easy.c memory.c sdcard.c sst39sf.c \
 	sdcard.asm ram.asm rom.asm launch_cas.asm sst39sf.asm \
 	-startup=0 \
 	-pragma-define:CRT_ORG_CODE=0x7000 \
@@ -84,13 +85,13 @@ mini-launcher: mini-launcher.c fat32-mini.c memory.c sdcard.c sst39sf.c sdcard.a
 	-pragma-define:CLIB_STDIO_HEAP_SIZE=0 \
 	--max-allocs-per-node3000 \
 	--opt-code-size \
-	-SO3 -bn MINI-LAUNCHER.BIN \
+	-SO3 -bn EZLAUNCH.BIN \
 	-create-app -m \
-	&& mv MINI-LAUNCHER.bin MINI-LAUNCHER.BIN \
-	&& wc -c < MINI-LAUNCHER.BIN \
-	&& truncate -s 11520 MINI-LAUNCHER.BIN
+	&& mv EZLAUNCH.bin EZLAUNCH.BIN \
+	&& wc -c < EZLAUNCH.BIN \
+	&& truncate -s 11520 EZLAUNCH.BIN
 
-# @if grep -E 'sprintf|printf|fread|fwrite' MINI-LAUNCHER.map ; then \
-# 	echo "ERROR: stdio symbols found in MINI-LAUNCHER.map!"; \
+# @if grep -E 'sprintf|printf|fread|fwrite' EZLAUNCH.map ; then \
+# 	echo "ERROR: stdio symbols found in EZLAUNCH.map!"; \
 # 	exit 1; \
 # fi

@@ -1,6 +1,7 @@
 /**************************************************************************
  *                                                                        *
- *   Author: Ivo Filot <ivo@ivofilot.nl>                                  *
+ *   Author(s): Ivo Filot <ivo@ivofilot.nl>                               *
+ *              Dion Olsthoorn <@dionoid>                                 *
  *                                                                        *
  *   P2000T-SDCARD is free software:                                      *
  *   you can redistribute it and/or modify it under the terms of the      *
@@ -22,9 +23,9 @@
 #define _FAT32_H
 
 #define F_LL_SIZE               16
-#define MAX_LFN_LENGTH          26 // 2 * 13
-#define PAGE_SIZE               19 // number of files per page
-#define DISPLAY_OFFSET           2
+#define MAX_LFN_LENGTH          26 // 2 * 13 (LFN entries come in 13 byte chunks)
+#define PAGE_SIZE               19 // max number of files displayed on a page
+#define DISPLAY_OFFSET           2 // line-offset in the video memory for displaying files
 
 #include "sdcard.h"
 #include "util.h"
@@ -46,10 +47,10 @@ extern uint32_t _current_folder_cluster;
 // global variables for currently active file or folder
 extern uint32_t _filesize_current_file;
 extern uint8_t _filename[]; // filename buffer
-extern char _base_name[9];
-extern char _ext[4]; // file extension (3 chars, uppercased)
+extern char _base_name[9]; // DOS 8.3 base name (8 chars, uppercased)
+extern char _ext[4]; // DOS 8.3 extension (3 chars, uppercased)
 extern uint8_t _current_attrib;
-extern uint8_t _num_of_pages;
+extern uint8_t _num_of_pages; // number of pages in the current folder
 
 /**
  * @brief Read the Master Boot Record
@@ -75,12 +76,9 @@ void read_partition(uint32_t lba0);
 void read_folder(uint8_t page_number, uint8_t count_pages);
 
 /**
- * @brief Find a file identified by BASENAME and EXT in the folder correspond
- *        to the cluster address
+ * @brief Find a file identified by sequence number in the current folder
  * 
- * @param cluster   cluster address
- * @param basename  first 8 bytes of the file
- * @param ext       3 byte extension of the file
+ * @param file_id   file sequence number
  * @return uint32_t cluster address of the file or 0 if not found
  */
 uint32_t find_file(uint16_t file_id);
