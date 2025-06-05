@@ -296,12 +296,11 @@ uint8_t flash_rom(uint32_t faddr) {
 void store_file_rom(uint32_t faddr, uint16_t rom_addr) {
     build_linked_list(faddr);
     // count number of sectors
-    uint8_t total_sectors = _filesize_current_file / 512;
-    if(_filesize_current_file % 512 != 0) total_sectors++;
+    uint8_t total_sectors = (_filesize_current_file + 511) / 512;
 
     uint8_t ctr = 0;    // counter for clusters
     uint8_t scctr = 0;  // counter for sectors
-    while(_linkedlist[ctr] != 0xFFFFFFFF && ctr < 16 && scctr < total_sectors) {
+    while(_linkedlist[ctr] != 0xFFFFFFFF && ctr < 16) {
         const uint32_t caddr = calculate_sector_address(_linkedlist[ctr], 0);
         for(uint8_t i=0; i<_sectors_per_cluster; i++) {
             // directly transfer data to ROM chip
@@ -311,7 +310,7 @@ void store_file_rom(uint32_t faddr, uint16_t rom_addr) {
             close_command();
             // increment memory pointer
             rom_addr += 0x200;
-            if(++scctr == total_sectors) break;
+            if(++scctr == total_sectors) return;
         }
         ctr++;
     }

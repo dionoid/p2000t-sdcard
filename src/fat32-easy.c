@@ -325,8 +325,6 @@ void store_cas_ram(uint32_t faddr, uint16_t ram_addr) {
 
     // count number of clusters
     uint8_t ctr = 0;
-    uint8_t total_sectors = _filesize_current_file / 512 + 
-                            (_filesize_current_file % 512 != 0 ? 1 : 0);
     uint32_t caddr = 0;
     uint16_t nbytes_read = 0;    // count number of bytes read
     uint8_t sector_ctr = 0; // counter sector
@@ -384,8 +382,6 @@ void store_prg_intram(uint32_t faddr, uint16_t ram_addr) {
     // count number of clusters
     uint8_t ctr = 0;
     uint8_t cursec = 0;
-    uint8_t total_sectors = _filesize_current_file / 512 + 
-                            (_filesize_current_file % 512 != 0 ? 1 : 0);
     uint32_t caddr = 0;
     uint16_t nbytes = 0;    // count number of bytes
 

@@ -399,15 +399,14 @@ void store_cas_ram(uint32_t faddr, uint16_t ram_addr) {
 
     // count number of clusters
     uint8_t ctr = 0;
-    uint8_t total_sectors = _filesize_current_file / 512 + 
-                            (_filesize_current_file % 512 != 0 ? 1 : 0);
+    uint8_t total_sectors = (_filesize_current_file + 511) / 512;
     uint32_t caddr = 0;
     uint16_t nbytes = 0;    // count number of bytes
     uint8_t sector_ctr = 0; // counter sector
     uint8_t first_sector = 1; // whether this is the first sector
 
     ctr = 0;
-    while(_linkedlist[ctr] != 0xFFFFFFFF && ctr < 16) {
+    while(_linkedlist[ctr] != 0xFFFFFFFF && ctr < 16 && nbytes < _filesize_current_file) {
 
         // calculate address of sector
         caddr = calculate_sector_address(_linkedlist[ctr], 0);
@@ -441,7 +440,7 @@ void store_cas_ram(uint32_t faddr, uint16_t ram_addr) {
 
             nbytes += 512;
             if(nbytes >= _filesize_current_file) {
-                return;
+                break;
             }
             sector_ctr++;
         }
@@ -466,8 +465,7 @@ void store_prg_intram(uint32_t faddr, uint16_t ram_addr) {
     // count number of clusters
     uint8_t ctr = 0;
     uint8_t cursec = 0;
-    uint8_t total_sectors = _filesize_current_file / 512 + 
-                            (_filesize_current_file % 512 != 0 ? 1 : 0);
+    uint8_t total_sectors = (_filesize_current_file + 511) / 512;
     uint32_t caddr = 0;
     uint16_t nbytes = 0;    // count number of bytes
 
