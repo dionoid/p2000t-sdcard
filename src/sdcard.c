@@ -105,3 +105,7 @@ uint8_t init_sdcard(void) {
 
     return 0;
 }
+
+uint8_t read_sector(uint32_t sec_addr) { 
+    return read_sector_to(sec_addr, SDCACHE0); 
+}

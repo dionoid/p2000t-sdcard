@@ -218,10 +218,7 @@ uint32_t read_folder(int16_t file_id, uint8_t casrun) {
                                 } else {             // file entry
                                     if(casrun == 1 && memcmp(_ext, "CAS", 3) == 0) {    // cas file
                                         // read from SD card once more and extract CAS data
-                                        open_command();
-                                        cmd17(calculate_sector_address(fc, 0));
-                                        fast_sd_to_ram_first_0x100(SDCACHE1);
-                                        close_command();
+                                        read_sector_to(calculate_sector_address(fc, 0), SDCACHE1);
 
                                         // grab CAS metadata
                                         uint8_t casname[16];
@@ -407,9 +404,10 @@ void store_cas_ram(uint32_t faddr, uint16_t ram_addr) {
     uint32_t caddr = 0;
     uint16_t nbytes = 0;    // count number of bytes
     uint8_t sector_ctr = 0; // counter sector
+    uint8_t first_sector = 1; // whether this is the first sector
 
     ctr = 0;
-    while(_linkedlist[ctr] != 0xFFFFFFFF && ctr < 16 && nbytes < _filesize_current_file) {
+    while(_linkedlist[ctr] != 0xFFFFFFFF && ctr < 16) {
 
         // calculate address of sector
         caddr = calculate_sector_address(_linkedlist[ctr], 0);
@@ -417,38 +415,25 @@ void store_cas_ram(uint32_t faddr, uint16_t ram_addr) {
         // loop over all sectors given a cluster and copy the data to RAM
         for(uint8_t i=0; i<_sectors_per_cluster; i++) {
 
-            if(sector_ctr == 0) {
-                // program length and transfer address
-                read_sector(caddr); // read sector data
-                ram_write_uint16_t(0x8000, ram_read_uint16_t(SDCACHE0 + 0x0030));
-                ram_write_uint16_t(0x8002, ram_read_uint16_t(SDCACHE0 + 0x0032));
-                ram_transfer(0x100, ram_addr, 0x100);
-                ram_addr += 0x100;
-            } else {
-                // open command for sending sector retrieval address
-                open_command();
-                cmd17(caddr);    // prime SD-card for data retrieval
-
-                // perform fast data transfer using custom assembly routines
-                switch(sector_ctr % 5) {
-                    case 0:
-                        // preamble is first 0x100 bytes of sector
-                        fast_sd_to_ram_last_0x100(ram_addr);
-                        ram_addr += 0x100;
-                    break;
-                    case 2:
-                        // preamble is last 0x100 bytes of sector
-                        fast_sd_to_ram_first_0x100(ram_addr);
-                        ram_addr += 0x100;
-                    break;
-                    default: // 1,3,4 are complete blocks
-                        fast_sd_to_ram_full(ram_addr);
-                        ram_addr += 0x200;
-                    break;
+            read_sector_to(caddr + i, ram_addr); // read sector data (512 bytes) to external ram address
+            switch(sector_ctr % 5) {
+            case 0:
+                // preamble is first 0x100 bytes of sector
+                if (first_sector) {
+                    // first sector, copy the preamble's transfer address and length
+                    ram_write_uint16_t(0x8000, ram_read_uint16_t(SDCACHE0 + 0x0030));
+                    ram_write_uint16_t(0x8002, ram_read_uint16_t(SDCACHE0 + 0x0032));
+                    first_sector = 0;
                 }
-
-                // close command
-                close_command();
+                ram_transfer(ram_addr + 0x100, ram_addr, 0x100);
+                ram_addr += 256;
+                break;
+            case 2:
+                ram_addr += 256;
+                break;
+            default: // 1,3,4 are complete blocks
+                ram_addr += 512;
+                break;
             }
 
             sprintf(termbuffer, "Loading %i / %i sectors", sector_ctr, total_sectors);
@@ -456,10 +441,8 @@ void store_cas_ram(uint32_t faddr, uint16_t ram_addr) {
 
             nbytes += 512;
             if(nbytes >= _filesize_current_file) {
-                break;
+                return;
             }
-
-            caddr++;
             sector_ctr++;
         }
 

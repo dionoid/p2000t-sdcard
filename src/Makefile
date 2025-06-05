@@ -39,7 +39,7 @@ launcher: main.c commands.c fat32.c memory.c terminal.c sdcard.c sdcard.asm ram.
 	-pragma-define:CRT_ENABLE_EIDI=0x12 \
 	-pragma-define:CLIB_MALLOC_HEAP_SIZE=0 \
 	-pragma-define:CLIB_STDIO_HEAP_SIZE=0 \
-	--max-allocs-per-node200000 \
+	--max-allocs-per-node3000 \
 	--opt-code-size \
 	-SO3 -bn LAUNCHER.BIN \
 	-create-app -m \
